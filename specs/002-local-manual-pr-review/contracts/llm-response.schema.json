@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://najm.sa/schemas/ai-code-review/llm-response.v2.schema.json",
+  "title": "AI code review model response (v2 - checklist citations)",
+  "description": "The only shape the model may return. Enforced by review_agent/parser.py. A response failing this schema triggers exactly one stricter retry; a second failure ends the run as a degraded review (exit 3), never as partial or invented feedback. Change from v1 (feature 001): a checklist violation now cites `item_id` and `document` instead of free-text `item` + `source`, because rules now come from several Excel and Word documents and a filename alone is no longer traceable (FR-027, research R12). A violation whose `item_id` is not present in the combined checklist supplied with the prompt is DROPPED by the parser and counted in the report as a hallucinated citation - it is never posted.",
+  "type": "object",
+  "required": ["coverage", "checklist_violations", "code_issues", "summary"],
+  "additionalProperties": true,
+  "properties": {
+    "coverage": {
+      "description": "One entry per acceptance criterion of the linked story. Empty array when no work item is linked (FR-024).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["criterion", "status", "evidence"],
+        "additionalProperties": true,
+        "properties": {
+          "criterion": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The acceptance criterion, quoted or closely paraphrased from the story."
+          },
+          "status": {
+            "enum": ["appears_addressed", "not_addressed", "possible_contradiction"],
+            "description": "appears_addressed: the diff plausibly implements it. not_addressed: no related changes - NEUTRAL, never a defect, never a comment, never changes the exit code (Principle V). possible_contradiction: the diff conflicts with it."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "What in the diff supports this status. Must reference the diff, not speculate about code not shown."
+          }
+        }
+      }
+    },
+    "checklist_violations": {
+      "description": "Only real violations of the combined checklist. An empty array is the correct answer for a clean diff - do not invent stylistic filler (FR-029).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["item_id", "item_title", "document", "issue"],
+        "additionalProperties": true,
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The identifier of the violated checklist item, copied EXACTLY from the combined checklist supplied in the prompt (for example 'SEC-WEB-01' or 'NFR-v2.0:Arch Quality Attributes:17'). An identifier not present in that checklist causes the finding to be dropped."
+          },
+          "item_title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The title of that checklist item, for readability in the posted comment."
+          },
+          "document": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filename of the checklist document the item came from, exactly as labelled in the combined checklist (FR-027)."
+          },
+          "issue": {
+            "type": "string",
+            "minLength": 1,
+            "description": "How this diff violates that item."
+          },
+          "severity": {
+            "enum": ["HIGH", "MEDIUM", "LOW", ""],
+            "description": "Optional. Echo the severity the checklist item carries, where it carries one. Never invent a severity the document does not state."
+          },
+          "file": {
+            "type": "string",
+            "description": "Repo-relative path from the diff, or omitted when the violation is not file-specific."
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Line in the post-change file. 0 or omitted means no specific line - the finding then routes to the summary comment instead of an inline comment (FR-036)."
+          }
+        }
+      }
+    },
+    "code_issues": {
+      "description": "Defects visible in the diff text. Not style preferences, and not anything requiring the code to be run. Reported for the reviewer's information; nothing here gates a merge (Principle VI).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "issue"],
+        "additionalProperties": true,
+        "properties": {
+          "severity": {
+            "enum": ["high", "medium", "low"],
+            "description": "high: incorrect behaviour, data loss, or a security problem. medium: a real defect with limited blast radius. low: worth knowing."
+          },
+          "issue": {
+            "type": "string",
+            "minLength": 1
+          },
+          "file": {
+            "type": "string",
+            "description": "Repo-relative path from the diff, or omitted when not file-specific."
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Line in the post-change file. 0 or omitted routes the finding to the summary comment."
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Plain-language overall summary for the developer. Reports what the change does and what is worth a human's attention. Never asserts that unaddressed criteria are defects."
+    }
+  }
+}

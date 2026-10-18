@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://najm.sa/schemas/ai-code-review/llm-response.schema.json",
+  "title": "AI code review model response",
+  "description": "The only shape the model may return. Enforced by review_agent/parser.py. A response failing this schema triggers exactly one stricter retry (FR-022); a second failure ends the run as a degraded review (FR-029), never as partial or invented feedback. Note that false coverage claims are NOT part of this contract - they are derived from `coverage` plus the PR description's declared scope by the agent, so the headline finding is a deterministic function of the coverage map.",
+  "type": "object",
+  "required": ["coverage", "checklist_violations", "code_issues", "summary"],
+  "additionalProperties": true,
+  "properties": {
+    "coverage": {
+      "description": "One entry per acceptance criterion of every linked story. Empty array when no work item is linked (FR-008).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["criterion", "status", "evidence"],
+        "additionalProperties": true,
+        "properties": {
+          "criterion": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The acceptance criterion, quoted or closely paraphrased from the story."
+          },
+          "status": {
+            "enum": ["appears_addressed", "not_addressed", "possible_contradiction"],
+            "description": "appears_addressed: the diff plausibly implements it. not_addressed: no related changes - NEUTRAL, never a defect, never comments, never fails the run (FR-016). possible_contradiction: the diff conflicts with it - the only loud flag."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "What in the diff supports this status. For not_addressed, a brief statement that nothing related was found. Must reference the diff, not speculate about code not shown."
+          }
+        }
+      }
+    },
+    "checklist_violations": {
+      "description": "Only real violations of the combined checklist. An empty array is the correct answer for a clean diff - do not invent stylistic filler (FR-019).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["item", "source", "issue"],
+        "additionalProperties": true,
+        "properties": {
+          "item": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The checklist item that is violated, as written in the checklist."
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filename of the checklist this item came from, exactly as labelled in the combined checklist (FR-019)."
+          },
+          "issue": {
+            "type": "string",
+            "minLength": 1,
+            "description": "How this diff violates that item."
+          },
+          "file": {
+            "type": "string",
+            "description": "Repo-relative path from the diff, or omitted / empty when the violation is not file-specific."
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Line in the post-change file. 0 or omitted means no specific line - the finding then routes to the summary discussion instead of an inline comment (FR-025)."
+          }
+        }
+      }
+    },
+    "code_issues": {
+      "description": "Defects visible in the diff text. Not style preferences, and not anything requiring the code to be run.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "issue"],
+        "additionalProperties": true,
+        "properties": {
+          "severity": {
+            "enum": ["high", "medium", "low"],
+            "description": "high: incorrect behaviour, data loss, or a security problem. medium: a real defect with limited blast radius. low: worth knowing, not worth blocking. Only `high` participates in the blocking exit code (FR-028)."
+          },
+          "issue": {
+            "type": "string",
+            "minLength": 1
+          },
+          "file": {
+            "type": "string",
+            "description": "Repo-relative path from the diff, or omitted when not file-specific."
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Line in the post-change file. 0 or omitted routes the finding to the summary (FR-025)."
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Plain-language overall summary for the reviewer (FR-021). Reports what the change does and what is worth a human's attention. Never asserts that unaddressed criteria are defects."
+    }
+  }
+}

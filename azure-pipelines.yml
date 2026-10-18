@@ -1,0 +1,72 @@
+# AI code review agent - PR validation build.
+#
+# On TFS / Azure DevOps Server a pull request does NOT trigger a pipeline from
+# YAML, so there is no `pr:` block here. This runs as a BRANCH POLICY:
+#
+#   Repos -> Branches -> master -> Branch policies -> Build Validation
+#            -> add this pipeline
+#
+# Two one-time settings, or posting fails with a 403 and the review is silent:
+#   1. "Allow scripts to access the OAuth token" on the job (supplies
+#      SYSTEM_ACCESSTOKEN, which the agent prefers over a PAT).
+#   2. "Contribute to pull requests" for the build service identity on this repo.
+
+trigger: none
+pr: none
+
+pool:
+  name: Default          # the existing self-hosted pool
+
+variables:
+  # Holds LLM_API_KEY (and optionally LLM_BASE_URL) as SECRET variables.
+  # The key must never appear in this file.
+  - group: ai-code-review
+
+jobs:
+  - job: review
+    displayName: AI code review
+    timeoutInMinutes: 10        # SC-002 budgets 5 minutes; this is the backstop
+
+    steps:
+      - checkout: self
+        fetchDepth: 1           # the agent reads blobs over REST, not from disk
+
+      # The build agent's Python is not guaranteed. Fail here, loudly and early,
+      # rather than three steps later with a confusing import error.
+      - script: |
+          python --version
+          python -m pip --version
+        displayName: Probe the Python environment
+        failOnStderr: false
+
+      - script: python -m pip install --disable-pip-version-check -r review_agent/requirements.txt
+        displayName: Install agent dependencies
+
+      - script: python review_agent/main.py
+        displayName: Review the pull request
+        env:
+          # PR context, supplied by the validation build - nothing hard-coded.
+          TFS_BASE_URL: $(System.TeamFoundationCollectionUri)
+          TFS_PROJECT: $(System.TeamProject)
+          TFS_REPO: $(Build.Repository.Name)
+          TFS_PR_ID: $(System.PullRequest.PullRequestId)
+
+          # The build's own credential. Requires setting (1) above; when the
+          # setting is off this arrives as an empty string, which the agent
+          # treats as absent and reports clearly instead of failing obscurely.
+          SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+          # Shared checklists.
+          CHECKLIST_REPO_URL: $(CHECKLIST_REPO_URL)
+          CHECKLIST_PATH: $(CHECKLIST_PATH)
+          CHECKLIST_FILE_PATTERN: $(CHECKLIST_FILE_PATTERN)
+          CHECKLIST_BRANCH: $(CHECKLIST_BRANCH)
+
+          # AI provider. LLM_API_KEY comes from the secret variable group.
+          LLM_PROVIDER: $(LLM_PROVIDER)
+          LLM_MODEL: $(LLM_MODEL)
+          LLM_API_KEY: $(LLM_API_KEY)
+
+          # Post for real, and never block the merge: a human decides.
+          DRY_RUN: 'false'
+          FAIL_ON_CONTRADICTION: 'false'

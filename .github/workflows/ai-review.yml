@@ -1,0 +1,19 @@
+name: AI code review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+jobs:
+  review:
+    uses: vijayclarion/codereviewagent/.github/workflows/code-review.yml@007-github-and-cross-file
+    with:
+      model: claude-sonnet-5
+      agent_ref: 007-github-and-cross-file
+      checklist_repo: vijayclarion/codereviewchecklist
+      dry_run: false
+    secrets:
+      llm_api_key: ${{ secrets.AI_REVIEW_LLM_API_KEY }}
+      review_bot_token: ${{ secrets.AI_REVIEW_BOT_TOKEN }}

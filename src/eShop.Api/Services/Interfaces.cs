@@ -5,7 +5,7 @@ namespace eShop.Api.Services
     public interface ICartRepository
     {
         Cart GetForCustomer(string customerId);
-        void Save(Cart cart);
+        void Save(Cart cart, string appliedCouponCode);
     }
 
     public interface ICatalogService

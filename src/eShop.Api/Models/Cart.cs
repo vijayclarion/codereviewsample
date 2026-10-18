@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -8,6 +9,8 @@ namespace eShop.Api.Models
         public string CustomerId { get; set; }
         public List<CartItem> Items { get; set; } = new List<CartItem>();
         public decimal Total { get; private set; }
+        public string CouponCode { get; set; }
+        public DateTime? CouponAppliedAt { get; set; }
 
         public static Cart CreateFor(string customerId)
         {
@@ -17,6 +20,11 @@ namespace eShop.Api.Models
         public void Recalculate()
         {
             Total = Items.Sum(i => i.UnitPrice * i.Quantity);
+        }
+
+        public void ApplyCoupon(decimal percentOff)
+        {
+            Total = Total - (Total * percentOff / 100m);
         }
     }
 
@@ -32,6 +40,7 @@ namespace eShop.Api.Models
     {
         public string ProductId { get; set; }
         public int Quantity { get; set; }
+        public string CouponCode { get; set; }
     }
 
     public class Product

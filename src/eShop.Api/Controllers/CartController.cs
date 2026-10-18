@@ -58,9 +58,20 @@ namespace eShop.Api.Controllers
                 });
             }
 
+            if (!string.IsNullOrEmpty(request.CouponCode))
+            {
+                cart.CouponCode = request.CouponCode;
+                cart.CouponAppliedAt = DateTime.Now;
+            }
+
             // AC5: recalculate the total before saving.
             cart.Recalculate();
             _carts.Save(cart);
+
+            if (cart.CouponCode != null)
+            {
+                cart.ApplyCoupon(10m);
+            }
 
             return Ok(cart);
         }
